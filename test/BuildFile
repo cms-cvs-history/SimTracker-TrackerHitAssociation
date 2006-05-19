@@ -5,6 +5,7 @@
 <use name=SimDataFormats/TrackerDigiSimLink>
 <use name=Geometry/TrackerGeometryBuilder>
 <use name=Geometry/Records/interface>
+<use name=DataFormats/Math>
 <use name=clhep>
 <use name=boost>
 <use name=root>
