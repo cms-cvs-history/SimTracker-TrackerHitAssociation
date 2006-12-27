@@ -3,6 +3,8 @@
 <use name=FWCore/ParameterSet>
 <use name=SimTracker/TrackerHitAssociation>
 <use name=SimDataFormats/TrackerDigiSimLink>
+<use name=SimDataFormats/Track>
+<use name=SimDataFormats/Vertex>
 <use name=Geometry/TrackerGeometryBuilder>
 <use name=Geometry/Records>
 <use name=DataFormats/Math>
