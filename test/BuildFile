@@ -8,7 +8,6 @@
 <use name=Geometry/TrackerGeometryBuilder>
 <use name=Geometry/Records>
 <use name=DataFormats/Math>
-<use name=clhep>
 <use name=boost>
 <use name=root>
 
