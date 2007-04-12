@@ -13,7 +13,7 @@
 
 
 <library file="*.cc" name=SimTrackerTrackerHitAssociationTestModules>
-<flags  SEAL_PLUGIN_NAME="SimTrackerTrackerHitAssociationTestModules">
+<flags EDM_PLUGIN=1>
 </library>
 
 
