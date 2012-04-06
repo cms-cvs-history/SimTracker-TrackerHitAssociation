@@ -27,6 +27,7 @@ TrackerHitAssociator::TrackerHitAssociator(const edm::Event& e)  :
   myEvent_(e), 
   doPixel_( true ),
   doStrip_( true ), 
+  stripCompactMode_( false ), 
   doTrackAssoc_( false ) {
   trackerContainers.clear();
   //
@@ -66,7 +67,15 @@ TrackerHitAssociator::TrackerHitAssociator(const edm::Event& e)  :
     SimHitMap[(*isim).detUnitId()].push_back((*isim));
   }
   
-  if(doStrip_) e.getByLabel("simSiStripDigis", stripdigisimlink);
+  if(doStrip_) {
+    if (stripCompactMode_) {
+        edm::Handle< StripCompactDigiSimLinks > handle;
+        e.getByLabel("compactSiStripDigiSimLinks", handle);
+        stripcompactdigisimlink = handle->makeReverseMap();
+    } else {
+        e.getByLabel("simSiStripDigis", stripdigisimlink);
+    }
+  }
   if(doPixel_) e.getByLabel("simSiPixelDigis", pixeldigisimlink);
   
 }
@@ -78,6 +87,7 @@ TrackerHitAssociator::TrackerHitAssociator(const edm::Event& e, const edm::Param
   myEvent_(e), 
   doPixel_( conf.getParameter<bool>("associatePixel") ),
   doStrip_( conf.getParameter<bool>("associateStrip") ),
+  stripCompactMode_( conf.existsAs<bool>("useCompactStripLinks") ? conf.getParameter<bool>("useCompactStripLinks") : false), 
   doTrackAssoc_( conf.getParameter<bool>("associateRecoTracks") ){
   
   //if track association there is no need to acces the CrossingFrame
@@ -112,7 +122,15 @@ TrackerHitAssociator::TrackerHitAssociator(const edm::Event& e, const edm::Param
     
   }
 
-  if(doStrip_) e.getByLabel("simSiStripDigis", stripdigisimlink);
+  if(doStrip_) {
+    if (stripCompactMode_) {
+        edm::Handle< StripCompactDigiSimLinks > handle;
+        e.getByLabel("compactSiStripDigiSimLinks", handle);
+        stripcompactdigisimlink = handle->makeReverseMap();
+    } else {
+        e.getByLabel("simSiStripDigis", stripdigisimlink);
+    }
+  }
   if(doPixel_) e.getByLabel("simSiPixelDigis", pixeldigisimlink);
   
 }
@@ -376,7 +394,7 @@ void TrackerHitAssociator::associateSimpleRecHit(const SiStripRecHit2D * simpler
       clust=&(*simplerechit->cluster_regional());
     } 
   
-  associateSimpleRecHitCluster(clust,simplerechit->geographicalId(),simtrackid);
+  associateSimpleRecHitCluster(clust,simtrackid);
 }
 
 
@@ -392,12 +410,10 @@ void TrackerHitAssociator::associateSiStripRecHit1D(const SiStripRecHit1D * simp
     {
       clust=&(*simplerechit->cluster_regional());
     } 
-  associateSimpleRecHitCluster(clust,simplerechit->geographicalId(),simtrackid);
+  associateSimpleRecHitCluster(clust,simtrackid);
 }
 
-void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* clust,
-							const uint32_t& detID,
-							std::vector<SimHitIdpr>& theSimtrackid, std::vector<PSimHit>& simhit)
+void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* clust, std::vector<SimHitIdpr>& theSimtrackid, std::vector<PSimHit>& simhit)
 {
 // Caller needs to clear simhit before calling this function
 
@@ -406,16 +422,14 @@ void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* cl
   //initialize class vector
   simhitCFPos.clear();
 
-  associateSimpleRecHitCluster(clust, detID, theSimtrackid);
+  associateSimpleRecHitCluster(clust, theSimtrackid);
 
   for(size_t i=0; i<simhitCFPos.size(); i++){
     simhit.push_back(TrackerHits.getObject(simhitCFPos[i]));
   }
 }
 
-void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* clust,
-							const uint32_t& detID,
-							std::vector<PSimHit>& simhit)
+void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* clust, std::vector<PSimHit>& simhit)
 {
 // Caller needs to clear simhit before calling this function
 
@@ -423,21 +437,101 @@ void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* cl
   simtrackid.clear();
   simhitCFPos.clear();
 
-  associateSimpleRecHitCluster(clust, detID, simtrackid);
+  associateSimpleRecHitCluster(clust, simtrackid);
 
   for(size_t i=0; i<simhitCFPos.size(); i++){
     simhit.push_back(TrackerHits.getObject(simhitCFPos[i]));
   }
 }
 
-void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* clust,
-							const uint32_t& detID,
-							std::vector<SimHitIdpr>& simtrackid){
+void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* clust, std::vector<SimHitIdpr>& simtrackid){
+    if (stripCompactMode_) associateSimpleRecHitClusterCompact(clust, simtrackid);
+    else associateSimpleRecHitClusterNormal(clust, simtrackid);
+}
+void TrackerHitAssociator::associateSimpleRecHitClusterCompact(const SiStripCluster* clust, std::vector<SimHitIdpr>& simtrackid){
   //  std::cout <<"ASSOCIATE SIMPLE RECHIT" << std::endl;	    
   StripHits =true;	  
   
-  //DetId detid=  clust->geographicalId();
-  //  uint32_t detID = detid.rawId();
+  DetId detid=  clust->geographicalId();
+  uint32_t detID = detid.rawId();
+  
+  //to store temporary charge information
+  std::vector<SimHitIdpr> cache_simtrackid; 
+  cache_simtrackid.clear();
+  
+  std::map<SimHitIdpr, vector<float> > temp_simtrackid;
+  temp_simtrackid.clear();
+ 
+  std::map<uint32_t, std::vector<StripCompactDigiSimLinks::RevLink> >::const_iterator isearch = stripcompactdigisimlink.find(detID);
+  if(isearch != stripcompactdigisimlink.end()) {  //if it is not empty
+    //link_detset is a structure, link_detset.data is a std::vector<StripDigiSimLink>
+    //edm::DetSet<StripDigiSimLink> link_detset = (*stripdigisimlink)[detID];
+    const std::vector<StripCompactDigiSimLinks::RevLink> & link_detset = isearch->second;
+    
+    if(clust!=0){//the cluster is valid
+
+      //    const edm::Ref<edm::DetSetVector<SiStripCluster>, SiStripCluster, edm::refhelper::FindForDetSetVector<SiStripCluster> > clust=simplerechit->cluster();
+      
+      //float chg;
+      int clusiz = clust->amplitudes().size();
+      int first  = clust->firstStrip();     
+      int last   = first + clusiz;
+      
+//       std::cout << "CLUSTERSIZE " << clusiz << " first strip = " << first << " last strip = " << last-1 << std::endl;
+//       std::cout << " detID = " << detID << " DETSET size = " << link_detset.data.size() << std::endl;
+      //use a vector
+      std::vector<SimHitIdpr> idcachev;
+      std::vector<int> CFposcachev;
+      for(std::vector<StripCompactDigiSimLinks::RevLink>::const_iterator linkiter = link_detset.begin(); linkiter != link_detset.end(); linkiter++){
+	//StripDigiSimLink link = *linkiter;
+
+        // two intervals overlap if the rightmost starts before the leftmost ends
+        // i.e. if max(start1, start2) <= min(end1, end2)
+        if ( std::max<int>(linkiter->firstStrip, first) <= std::min<int>(linkiter->lastStrip, last) ) {
+	  
+	  //check this digisimlink
+// 	  printf("%s%4d%s%8d%s%3d%s%8.4f\n", "CHANNEL = ", linkiter->channel(), " TrackID = ", linkiter->SimTrackId(),
+// 		 " Process = ", TrackerHits.getObject(linkiter->CFposition()-1).processType(), " fraction = ", linkiter->fraction());
+	  /*
+	    std::cout << "CHECKING CHANNEL  = " << linkiter->channel()   << std::endl;
+	    std::cout << "TrackID  = " << linkiter->SimTrackId()  << std::endl;
+	    std::cout << "Position = " << linkiter->CFposition()  << std::endl;
+	    std::cout << " POS -1 = " << TrackerHits.getObject(linkiter->CFposition()-1).localPosition() << std::endl;
+	    std::cout << " Process = " << TrackerHits.getObject(linkiter->CFposition()-1).processType() << std::endl;
+	    std::cout << " fraction = " << linkiter->fraction() << std::endl;
+	  */
+	  
+	  SimHitIdpr currentId(linkiter->simTrackId, linkiter->eventId);
+	  
+	  //create a vector with the list of SimTrack ID's of the tracks that contributed to the RecHit
+	  //write the id only once in the vector
+	  
+	  if(find(idcachev.begin(),idcachev.end(),currentId ) == idcachev.end()){
+	    /*
+	      std::cout << " Adding track id  = " << currentId.first  
+	      << " Event id = " << currentId.second.event() 
+	      << " Bunch Xing = " << currentId.second.bunchCrossing() 
+	      << std::endl;
+	    */
+	    idcachev.push_back(currentId);
+	    simtrackid.push_back(currentId);
+	  }
+	  
+	}
+      }    
+    }
+    else {
+      edm::LogError("TrackerHitAssociator")<<"no cluster reference attached";
+    }
+  }
+}
+
+void TrackerHitAssociator::associateSimpleRecHitClusterNormal(const SiStripCluster* clust, std::vector<SimHitIdpr>& simtrackid){
+  //  std::cout <<"ASSOCIATE SIMPLE RECHIT" << std::endl;	    
+  StripHits =true;	  
+  
+  DetId detid=  clust->geographicalId();
+  uint32_t detID = detid.rawId();
   
   //to store temporary charge information
   std::vector<SimHitIdpr> cache_simtrackid; 
@@ -501,18 +595,19 @@ void TrackerHitAssociator::associateSimpleRecHitCluster(const SiStripCluster* cl
 	  
 	  //create a vector that contains all the position (in the MixCollection) of the SimHits that contributed to the RecHit
 	  //write position only once
-	  int currentCFPos = linkiter->CFposition()-1;
-	  if(find(CFposcachev.begin(),CFposcachev.end(),currentCFPos ) == CFposcachev.end()){
+
+//	  int currentCFPos = linkiter->CFposition()-1;
+//	  if(find(CFposcachev.begin(),CFposcachev.end(),currentCFPos ) == CFposcachev.end()){
 	    /*
 	      std::cout << "CHECKING CHANNEL  = " << linkiter->channel()   << std::endl;
 	      std::cout << "\tTrackID  = " << linkiter->SimTrackId()  << "\tCFPos = " << currentCFPos  << std::endl;
 	      std::cout << "\tLocal Pos = " << TrackerHits.getObject(currentCFPos).localPosition() 
 	      << "\tProcess = " << TrackerHits.getObject(currentCFPos).processType() << std::endl;
 	    */
-	    CFposcachev.push_back(currentCFPos);
-	    simhitCFPos.push_back(currentCFPos);
+//	    CFposcachev.push_back(currentCFPos);
+//	    simhitCFPos.push_back(currentCFPos);
 	    //	  simhitassoc.push_back( TrackerHits.getObject(currentCFPos));
-	  }
+//	  }
 	}
       }    
     }
@@ -586,7 +681,6 @@ void  TrackerHitAssociator::associatePixelRecHit(const SiPixelRecHit * pixelrech
   //
   DetId detid=  pixelrechit->geographicalId();
   uint32_t detID = detid.rawId();
-
   edm::DetSetVector<PixelDigiSimLink>::const_iterator isearch = pixeldigisimlink->find(detID); 
   if(isearch != pixeldigisimlink->end()) {  //if it is not empty
     //    edm::DetSet<PixelDigiSimLink> link_detset = (*pixeldigisimlink)[detID];

@@ -22,6 +22,7 @@
 #include "DataFormats/Common/interface/Handle.h"
 #include "FWCore/Framework/interface/ESHandle.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
+#include "DataFormats/Common/interface/EDProduct.h"
 
 //--- for SimHit
 #include "SimDataFormats/TrackingHit/interface/PSimHit.h"
@@ -31,6 +32,7 @@
 #include "DataFormats/SiPixelDigi/interface/PixelDigi.h"
 #include "SimDataFormats/TrackerDigiSimLink/interface/PixelDigiSimLink.h"
 #include "SimDataFormats/TrackerDigiSimLink/interface/StripDigiSimLink.h"
+#include "SimDataFormats/TrackerDigiSimLink/interface/StripCompactDigiSimLinks.h"
 
 //--- for RecHit
 #include "DataFormats/TrackingRecHit/interface/TrackingRecHit.h"
@@ -75,15 +77,10 @@ class TrackerHitAssociator {
   void associateSimpleRecHit(const SiStripRecHit2D * simplerechit,std::vector<SimHitIdpr> & simhitid);
   void associateSiStripRecHit1D(const SiStripRecHit1D * simplerechit,std::vector<SimHitIdpr> & simhitid);
   void associateSimpleRecHitCluster(const SiStripCluster* clust,
-				    const uint32_t& detID,
 				    std::vector<SimHitIdpr>& theSimtrackid,
 				    std::vector<PSimHit>& simhit);
-  void associateSimpleRecHitCluster(const SiStripCluster* clust,
-				    const uint32_t& detID,
-				    std::vector<PSimHit>& simhit);
-  void associateSimpleRecHitCluster(const SiStripCluster* clust,
-				    const uint32_t& detID,
-				    std::vector<SimHitIdpr>& simtrackid);
+  void associateSimpleRecHitCluster(const SiStripCluster* clust, std::vector<PSimHit>& simhit);
+  void associateSimpleRecHitCluster(const SiStripCluster* clust, std::vector<SimHitIdpr>& simtrackid);
 
   std::vector<SimHitIdpr> associateMatchedRecHit(const SiStripMatchedRecHit2D * matchedrechit);
   std::vector<SimHitIdpr> associateProjectedRecHit(const ProjectedSiStripRecHit2D * projectedrechit);
@@ -101,6 +98,9 @@ class TrackerHitAssociator {
   std::vector<PSimHit> thePixelHits;
  
  private:
+  void associateSimpleRecHitClusterNormal(const SiStripCluster* clust, std::vector<SimHitIdpr>& simtrackid);
+  void associateSimpleRecHitClusterCompact(const SiStripCluster* clust, std::vector<SimHitIdpr>& simtrackid);
+
   const edm::Event& myEvent_;
   typedef std::vector<std::string> vstring;
   vstring trackerContainers;
@@ -111,6 +111,7 @@ class TrackerHitAssociator {
   MixCollection<PSimHit>  TrackerHits;
 
   edm::Handle< edm::DetSetVector<StripDigiSimLink> >  stripdigisimlink;
+  std::map<uint32_t, std::vector<StripCompactDigiSimLinks::RevLink> >  stripcompactdigisimlink;
   edm::Handle< edm::DetSetVector<PixelDigiSimLink> >  pixeldigisimlink;
   //vector with the trackIds
   //  std::vector<unsigned int> simtrackid; 
@@ -120,7 +121,7 @@ class TrackerHitAssociator {
   std::vector<PSimHit> simhitassoc;
   bool StripHits;
   
-  bool doPixel_, doStrip_, doTrackAssoc_;
+  bool doPixel_, doStrip_, stripCompactMode_, doTrackAssoc_;
   
 };  
 
