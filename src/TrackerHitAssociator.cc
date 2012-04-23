@@ -76,8 +76,10 @@ TrackerHitAssociator::TrackerHitAssociator(const edm::Event& e)  :
         e.getByLabel("simSiStripDigis", stripdigisimlink);
     }
   }
-  if(doPixel_) e.getByLabel("simSiPixelDigis", pixeldigisimlink);
-  
+  if(doPixel_) {
+    InputTag pixel("mix", "simSiPixelDigis");
+    e.getByLabel(pixel, pixeldigisimlink);
+  }
 }
 
 //
@@ -131,7 +133,10 @@ TrackerHitAssociator::TrackerHitAssociator(const edm::Event& e, const edm::Param
         e.getByLabel("simSiStripDigis", stripdigisimlink);
     }
   }
-  if(doPixel_) e.getByLabel("simSiPixelDigis", pixeldigisimlink);
+  if(doPixel_) {
+    InputTag pixel("mix", "simSiPixelDigis");
+    e.getByLabel(pixel, pixeldigisimlink);
+  }
   
 }
 
